@@ -1,5 +1,6 @@
-import { Task } from './tasks-runner';
 import { ProjectGraphNode } from '../core/project-graph';
+import { ProjectGraphAnalyzer } from '../core/project-graph/project-graph-analyzer';
+import { Task } from './tasks-runner';
 
 const commonCommands = ['build', 'test', 'lint', 'e2e', 'deploy'];
 
@@ -77,4 +78,18 @@ export function getOutputsForTargetAndConfiguration(
   } else {
     return [];
   }
+}
+
+export function topologicallySortTasks(
+  graphAnalyzer: ProjectGraphAnalyzer,
+  tasks: Task[]
+) {
+  const sortedTasks = [];
+  graphAnalyzer.topologicalSort().forEach(entry => {
+    const task = tasks.find(task => task.target.project === entry.id);
+    if (task) {
+      sortedTasks.push(task);
+    }
+  });
+  return sortedTasks;
 }

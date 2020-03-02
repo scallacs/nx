@@ -1,57 +1,35 @@
 import * as runAll from 'npm-run-all';
-import { Observable } from 'rxjs';
 import { basename } from 'path';
+import { Observable } from 'rxjs';
+
+import { cliCommand } from '../core/file-utils';
+import { ProjectGraph } from '../core/project-graph';
+import { ProjectGraphAnalyzer } from '../core/project-graph/project-graph-analyzer';
+import { NxJson } from '../core/shared-interfaces';
+import { readJsonFile } from '../utils/fileutils';
+import { output } from '../utils/output';
 import {
   AffectedEventType,
   Task,
   TaskCompleteEvent,
   TasksRunner
 } from './tasks-runner';
-import { output } from '../utils/output';
-import { readJsonFile } from '../utils/fileutils';
-import { getCommand, getCommandAsString } from './utils';
-import { cliCommand } from '../core/file-utils';
-import { ProjectGraph } from '../core/project-graph';
-import { NxJson } from '../core/shared-interfaces';
+import { getCommandAsString, topologicallySortTasks } from './utils';
 
 export interface DefaultTasksRunnerOptions {
   parallel?: boolean;
   maxParallel?: number;
 }
 
-function taskDependsOnDeps(
+export function taskDependsOnDeps(
   task: Task,
   deps: Task[],
   projectGraph: ProjectGraph
 ) {
-  function hasDep(source: string, target: string, visitedProjects: string[]) {
-    if (!projectGraph.dependencies[source]) {
-      return false;
-    }
-
-    if (projectGraph.dependencies[source].find(d => d.target === target)) {
-      return true;
-    }
-
-    return !!projectGraph.dependencies[source].find(r => {
-      if (visitedProjects.indexOf(r.target) > -1) return null;
-      return hasDep(r.target, target, [...visitedProjects, r.target]);
-    });
-  }
-
+  const graphAnalyzer = new ProjectGraphAnalyzer(projectGraph);
   return !!deps.find(dep =>
-    hasDep(task.target.project, dep.target.project, [])
+    graphAnalyzer.dependsOn(task.target.project, dep.target.project, [])
   );
-}
-
-function topologicallySortTasks(tasks: Task[], projectGraph: ProjectGraph) {
-  const sortedTasks = [...tasks];
-  sortedTasks.sort((a, b) => {
-    if (taskDependsOnDeps(a, [b], projectGraph)) return 1;
-    if (taskDependsOnDeps(b, [a], projectGraph)) return -1;
-    return 0;
-  });
-  return sortedTasks;
 }
 
 export function splitTasksIntoStages(
@@ -60,7 +38,8 @@ export function splitTasksIntoStages(
 ) {
   if (tasks.length === 0) return [];
   const res = [];
-  topologicallySortTasks(tasks, projectGraph).forEach(t => {
+  const graphAnalyzer = new ProjectGraphAnalyzer(projectGraph);
+  topologicallySortTasks(graphAnalyzer, tasks).forEach(t => {
     const stageWithNoDeps = res.find(
       tasksInStage => !taskDependsOnDeps(t, tasksInStage, projectGraph)
     );
